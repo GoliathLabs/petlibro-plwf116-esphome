@@ -1,0 +1,373 @@
+From 7b5654ec46b6a8248bcb47d6778b20d363ed1c6a Mon Sep 17 00:00:00 2001
+From: GoliathLabs <git@xdfr.de>
+Date: Wed, 4 Nov 2026 01:13:41 +0100
+Subject: [PATCH 3/3] [boards] Add Petlibro PLWF116
+
+RTL8721DM with 8 MiB flash and the vendor bootloader layout. The bootloader
+has the OTA slots fixed at 0x6000 and 0x186000. The vendor data at 0x3EC000
+and 0x7C0000 stays outside the LibreTiny partitions.
+
+Assisted-by: Claude Code (claude-opus-5-5)
+---
+ boards/petlibro-plwf116.json       |  42 +++++++
+ boards/variants/petlibro-plwf116.c | 191 +++++++++++++++++++++++++++++
+ boards/variants/petlibro-plwf116.h | 100 +++++++++++++++
+ 3 files changed, 333 insertions(+)
+ create mode 100644 boards/petlibro-plwf116.json
+ create mode 100644 boards/variants/petlibro-plwf116.c
+ create mode 100644 boards/variants/petlibro-plwf116.h
+
+diff --git a/boards/petlibro-plwf116.json b/boards/petlibro-plwf116.json
+new file mode 100644
+index 0000000..2631269
+--- /dev/null
++++ b/boards/petlibro-plwf116.json
+@@ -0,0 +1,42 @@
++{
++	"_base": [
++		"realtek-ambd"
++	],
++	"build": {
++		"mcu": "rtl8721dm",
++		"variant": "petlibro-plwf116",
++		"flash_size": "8MB"
++	},
++	"flash": {
++		"boot": "0x000000+0x3000",
++		"system": "0x003000+0x1000",
++		"boot_km4": "0x004000+0x2000",
++		"ota1": "0x006000+0xFA000",
++		"rtk_settings": "0x100000+0x6000",
++		"ota2": "0x186000+0x180000",
++		"kvs": "0x306000+0x8000",
++		"userdata": "0x30E000+0xDE000",
++		"vendor_cfg": "0x3EC000+0x15000",
++		"vendor_log": "0x7C0000+0x40000"
++	},
++	"upload": {
++		"flash_size": 8388608,
++		"maximum_size": 1024000
++	},
++	"name": "Petlibro PLWF116 (RTL8721DM)",
++	"symbol": "PLWF116",
++	"url": "https://www.petlibro.com/",
++	"vendor": "Petlibro",
++	"doc": {
++		"extra": [
++			"## Information",
++			"Main board of the Petlibro PLWF116 cordless water fountain (board revision DVT2), RTL8721DM with external 8 MiB XTX flash (JEDEC 0B 40 17).",
++			"The flash layout keeps the vendor bootloaders, which hard-code OTA1 at 0x6000 and OTA2 at 0x186000. The app size is capped at 0xFA000 because OTA1 ends where the SDK settings sectors (UART/AP settings, BT FTL, fast reconnect) begin at 0x100000; OTA2 keeps its full 0x180000 slot.",
++			"vendor_cfg holds the vendor's cloud identity, device settings and calibration data; vendor_log holds the vendor's event log. Neither is touched by LibreTiny.",
++			"The GPIO list is a superset for pin discovery: SPI flash pins PB12-PB17 and the flash power switch PB22 are excluded."
++		]
++	},
++	"pcb": {
++		"symbol": "PLWF116"
++	}
++}
+diff --git a/boards/variants/petlibro-plwf116.c b/boards/variants/petlibro-plwf116.c
+new file mode 100644
+index 0000000..3a0cf38
+--- /dev/null
++++ b/boards/variants/petlibro-plwf116.c
+@@ -0,0 +1,191 @@
++/* Petlibro PLWF116 (RTL8721DM). See petlibro-plwf116.h. */
++
++#include <Arduino.h>
++
++#ifdef LT_VARIANT_INCLUDE
++#include LT_VARIANT_INCLUDE
++#endif
++
++// clang-format off
++PinInfo lt_arduino_pin_info_list[PINS_COUNT] = {
++	// D0: PA0
++	{0u, PIN_GPIO | PIN_IRQ, PIN_NONE, 0},
++	// D1: PA1
++	{1u, PIN_GPIO | PIN_IRQ, PIN_NONE, 0},
++	// D2: PA2
++	{2u, PIN_GPIO | PIN_IRQ, PIN_NONE, 0},
++	// D3: PA3
++	{3u, PIN_GPIO | PIN_IRQ, PIN_NONE, 0},
++	// D4: PA4
++	{4u, PIN_GPIO | PIN_IRQ, PIN_NONE, 0},
++	// D5: PA5
++	{5u, PIN_GPIO | PIN_IRQ, PIN_NONE, 0},
++	// D6: PA6
++	{6u, PIN_GPIO | PIN_IRQ, PIN_NONE, 0},
++	// D7: PA7, LOG_TX
++	{7u, PIN_GPIO | PIN_IRQ | PIN_UART, PIN_NONE, 0},
++	// D8: PA8, LOG_RX
++	{8u, PIN_GPIO | PIN_IRQ | PIN_UART, PIN_NONE, 0},
++	// D9: PA9
++	{9u, PIN_GPIO | PIN_IRQ, PIN_NONE, 0},
++	// D10: PA10
++	{10u, PIN_GPIO | PIN_IRQ, PIN_NONE, 0},
++	// D11: PA11
++	{11u, PIN_GPIO | PIN_IRQ, PIN_NONE, 0},
++	// D12: PA12
++	{12u, PIN_GPIO | PIN_IRQ | PIN_PWM, PIN_NONE, 0},
++	// D13: PA13
++	{13u, PIN_GPIO | PIN_IRQ | PIN_PWM, PIN_NONE, 0},
++	// D14: PA14, radar IRQ in vendor fw? (GPIO[14]); no PWM
++	{14u, PIN_GPIO | PIN_IRQ, PIN_NONE, 0},
++	// D15: PA15
++	{15u, PIN_GPIO | PIN_IRQ, PIN_NONE, 0},
++	// D16: PA16
++	{16u, PIN_GPIO | PIN_IRQ, PIN_NONE, 0},
++	// D17: PA17
++	{17u, PIN_GPIO | PIN_IRQ, PIN_NONE, 0},
++	// D18: PA18
++	{18u, PIN_GPIO | PIN_IRQ, PIN_NONE, 0},
++	// D19: PA19
++	{19u, PIN_GPIO | PIN_IRQ, PIN_NONE, 0},
++	// D20: PA20
++	{20u, PIN_GPIO | PIN_IRQ, PIN_NONE, 0},
++	// D21: PA21
++	{21u, PIN_GPIO | PIN_IRQ, PIN_NONE, 0},
++	// D22: PA22
++	{22u, PIN_GPIO | PIN_IRQ, PIN_NONE, 0},
++	// D23: PA23
++	{23u, PIN_GPIO | PIN_IRQ | PIN_PWM, PIN_NONE, 0},
++	// D24: PA24
++	{24u, PIN_GPIO | PIN_IRQ | PIN_PWM, PIN_NONE, 0},
++	// D25: PA25
++	{25u, PIN_GPIO | PIN_IRQ | PIN_PWM, PIN_NONE, 0},
++	// D26: PA26
++	{26u, PIN_GPIO | PIN_IRQ | PIN_PWM, PIN_NONE, 0},
++	// D27: PA27, SWD_DATA, boot strap (normal_mode_sel)
++	{27u, PIN_GPIO | PIN_IRQ, PIN_NONE, 0},
++	// D28: PA28
++	{28u, PIN_GPIO | PIN_IRQ | PIN_PWM, PIN_NONE, 0},
++	// D29: PA29
++	{29u, PIN_GPIO | PIN_IRQ, PIN_NONE, 0},
++	// D30: PA30
++	{30u, PIN_GPIO | PIN_IRQ | PIN_PWM, PIN_NONE, 0},
++	// D31: PA31
++	{31u, PIN_GPIO | PIN_IRQ, PIN_NONE, 0},
++	// D32: PB0
++	{32u, PIN_GPIO | PIN_IRQ, PIN_NONE, 0},
++	// D33: PB1, A0
++	{33u, PIN_GPIO | PIN_IRQ | PIN_ADC, PIN_NONE, 0},
++	// D34: PB2, A1, battery ADC in vendor fw (analogin_init [0x22:5])
++	{34u, PIN_GPIO | PIN_IRQ | PIN_ADC, PIN_NONE, 0},
++	// D35: PB3, A2, SWD_CLK
++	{35u, PIN_GPIO | PIN_IRQ | PIN_ADC, PIN_NONE, 0},
++	// D36: PB4
++	{36u, PIN_GPIO | PIN_IRQ | PIN_PWM, PIN_NONE, 0},
++	// D37: PB5
++	{37u, PIN_GPIO | PIN_IRQ | PIN_PWM, PIN_NONE, 0},
++	// D38: PB6
++	{38u, PIN_GPIO | PIN_IRQ, PIN_NONE, 0},
++	// D39: PB7
++	{39u, PIN_GPIO | PIN_IRQ | PIN_PWM, PIN_NONE, 0},
++	// D40: PB8
++	{40u, PIN_GPIO | PIN_IRQ, PIN_NONE, 0},
++	// D41: PB9
++	{41u, PIN_GPIO | PIN_IRQ, PIN_NONE, 0},
++	// D42: PB10
++	{42u, PIN_GPIO | PIN_IRQ, PIN_NONE, 0},
++	// D43: PB11
++	{43u, PIN_GPIO | PIN_IRQ, PIN_NONE, 0},
++	// D44: PB18
++	{50u, PIN_GPIO | PIN_IRQ | PIN_PWM, PIN_NONE, 0},
++	// D45: PB19
++	{51u, PIN_GPIO | PIN_IRQ | PIN_PWM, PIN_NONE, 0},
++	// D46: PB20
++	{52u, PIN_GPIO | PIN_IRQ | PIN_PWM, PIN_NONE, 0},
++	// D47: PB21
++	{53u, PIN_GPIO | PIN_IRQ | PIN_PWM, PIN_NONE, 0},
++	// D48: PB23
++	{55u, PIN_GPIO | PIN_IRQ | PIN_PWM, PIN_NONE, 0},
++	// D49: PB24
++	{56u, PIN_GPIO | PIN_IRQ | PIN_PWM, PIN_NONE, 0},
++	// D50: PB25
++	{57u, PIN_GPIO | PIN_IRQ | PIN_PWM, PIN_NONE, 0},
++	// D51: PB26
++	{58u, PIN_GPIO | PIN_IRQ, PIN_NONE, 0},
++	// D52: PB27
++	{59u, PIN_GPIO | PIN_IRQ, PIN_NONE, 0},
++	// D53: PB28
++	{60u, PIN_GPIO | PIN_IRQ, PIN_NONE, 0},
++	// D54: PB29
++	{61u, PIN_GPIO | PIN_IRQ, PIN_NONE, 0},
++	// D55: PB30
++	{62u, PIN_GPIO | PIN_IRQ, PIN_NONE, 0},
++	// D56: PB31
++	{63u, PIN_GPIO | PIN_IRQ, PIN_NONE, 0},
++};
++// clang-format on
++
++// Maps a GPIO number to its PinInfo; indices not listed stay NULL.
++PinInfo *lt_arduino_pin_gpio_map[PINS_GPIO_MAX + 1] = {
++	[0] = &(lt_arduino_pin_info_list[0]), // PA0
++	[1] = &(lt_arduino_pin_info_list[1]), // PA1
++	[2] = &(lt_arduino_pin_info_list[2]), // PA2
++	[3] = &(lt_arduino_pin_info_list[3]), // PA3
++	[4] = &(lt_arduino_pin_info_list[4]), // PA4
++	[5] = &(lt_arduino_pin_info_list[5]), // PA5
++	[6] = &(lt_arduino_pin_info_list[6]), // PA6
++	[7] = &(lt_arduino_pin_info_list[7]), // PA7
++	[8] = &(lt_arduino_pin_info_list[8]), // PA8
++	[9] = &(lt_arduino_pin_info_list[9]), // PA9
++	[10] = &(lt_arduino_pin_info_list[10]), // PA10
++	[11] = &(lt_arduino_pin_info_list[11]), // PA11
++	[12] = &(lt_arduino_pin_info_list[12]), // PA12
++	[13] = &(lt_arduino_pin_info_list[13]), // PA13
++	[14] = &(lt_arduino_pin_info_list[14]), // PA14
++	[15] = &(lt_arduino_pin_info_list[15]), // PA15
++	[16] = &(lt_arduino_pin_info_list[16]), // PA16
++	[17] = &(lt_arduino_pin_info_list[17]), // PA17
++	[18] = &(lt_arduino_pin_info_list[18]), // PA18
++	[19] = &(lt_arduino_pin_info_list[19]), // PA19
++	[20] = &(lt_arduino_pin_info_list[20]), // PA20
++	[21] = &(lt_arduino_pin_info_list[21]), // PA21
++	[22] = &(lt_arduino_pin_info_list[22]), // PA22
++	[23] = &(lt_arduino_pin_info_list[23]), // PA23
++	[24] = &(lt_arduino_pin_info_list[24]), // PA24
++	[25] = &(lt_arduino_pin_info_list[25]), // PA25
++	[26] = &(lt_arduino_pin_info_list[26]), // PA26
++	[27] = &(lt_arduino_pin_info_list[27]), // PA27
++	[28] = &(lt_arduino_pin_info_list[28]), // PA28
++	[29] = &(lt_arduino_pin_info_list[29]), // PA29
++	[30] = &(lt_arduino_pin_info_list[30]), // PA30
++	[31] = &(lt_arduino_pin_info_list[31]), // PA31
++	[32] = &(lt_arduino_pin_info_list[32]), // PB0
++	[33] = &(lt_arduino_pin_info_list[33]), // PB1
++	[34] = &(lt_arduino_pin_info_list[34]), // PB2
++	[35] = &(lt_arduino_pin_info_list[35]), // PB3
++	[36] = &(lt_arduino_pin_info_list[36]), // PB4
++	[37] = &(lt_arduino_pin_info_list[37]), // PB5
++	[38] = &(lt_arduino_pin_info_list[38]), // PB6
++	[39] = &(lt_arduino_pin_info_list[39]), // PB7
++	[40] = &(lt_arduino_pin_info_list[40]), // PB8
++	[41] = &(lt_arduino_pin_info_list[41]), // PB9
++	[42] = &(lt_arduino_pin_info_list[42]), // PB10
++	[43] = &(lt_arduino_pin_info_list[43]), // PB11
++	[50] = &(lt_arduino_pin_info_list[44]), // PB18
++	[51] = &(lt_arduino_pin_info_list[45]), // PB19
++	[52] = &(lt_arduino_pin_info_list[46]), // PB20
++	[53] = &(lt_arduino_pin_info_list[47]), // PB21
++	[55] = &(lt_arduino_pin_info_list[48]), // PB23
++	[56] = &(lt_arduino_pin_info_list[49]), // PB24
++	[57] = &(lt_arduino_pin_info_list[50]), // PB25
++	[58] = &(lt_arduino_pin_info_list[51]), // PB26
++	[59] = &(lt_arduino_pin_info_list[52]), // PB27
++	[60] = &(lt_arduino_pin_info_list[53]), // PB28
++	[61] = &(lt_arduino_pin_info_list[54]), // PB29
++	[62] = &(lt_arduino_pin_info_list[55]), // PB30
++	[63] = &(lt_arduino_pin_info_list[56]), // PB31
++};
++
++void lt_init_variant() {
++	// no board-specific init
++}
+diff --git a/boards/variants/petlibro-plwf116.h b/boards/variants/petlibro-plwf116.h
+new file mode 100644
+index 0000000..20ee6e5
+--- /dev/null
++++ b/boards/variants/petlibro-plwf116.h
+@@ -0,0 +1,100 @@
++/* Petlibro PLWF116 (RTL8721DM). PA_n = n, PB_n = 32 + n.
++ * Superset of GPIOs for pin discovery; excludes SPI flash PB12-PB17 and flash power PB22. */
++
++#pragma once
++
++// clang-format off
++
++// Pins
++// ----
++#define PINS_COUNT         57 // Total GPIO count
++#define NUM_DIGITAL_PINS   57 // Digital inputs/outputs
++#define NUM_ANALOG_INPUTS  3  // ADC inputs
++#define NUM_ANALOG_OUTPUTS 0  // PWM & DAC outputs
++#define PINS_GPIO_MAX      63 // Last usable GPIO number
++
++// Analog pins
++// -----------
++#define PIN_A0	 33u // PB1
++#define PIN_A1	 34u // PB2
++#define PIN_A2	 35u // PB3
++#define PIN_ADC0 33u // PB1
++#define PIN_ADC1 34u // PB2
++#define PIN_ADC2 35u // PB3
++#define PINS_ADC {33u, 34u, 35u}
++
++// Serial ports
++// ------------
++// LOG_UART on PA7 (TX) / PA8 (RX) is the console and download port.
++#define HAS_SERIAL0 1
++#define PIN_SERIAL0_TX 7u // PA7
++#define PIN_SERIAL0_RX 8u // PA8
++#define PINS_SERIAL0_TX {7u}
++#define PINS_SERIAL0_RX {8u}
++#define SERIAL_INTERFACES_COUNT 1
++
++// Pin names
++// ---------
++#define PIN_PA0   0u
++#define PIN_PA1   1u
++#define PIN_PA2   2u
++#define PIN_PA3   3u
++#define PIN_PA4   4u
++#define PIN_PA5   5u
++#define PIN_PA6   6u
++#define PIN_PA7   7u
++#define PIN_PA8   8u
++#define PIN_PA9   9u
++#define PIN_PA10  10u
++#define PIN_PA11  11u
++#define PIN_PA12  12u
++#define PIN_PA13  13u
++#define PIN_PA14  14u
++#define PIN_PA15  15u
++#define PIN_PA16  16u
++#define PIN_PA17  17u
++#define PIN_PA18  18u
++#define PIN_PA19  19u
++#define PIN_PA20  20u
++#define PIN_PA21  21u
++#define PIN_PA22  22u
++#define PIN_PA23  23u
++#define PIN_PA24  24u
++#define PIN_PA25  25u
++#define PIN_PA26  26u
++#define PIN_PA27  27u
++#define PIN_PA28  28u
++#define PIN_PA29  29u
++#define PIN_PA30  30u
++#define PIN_PA31  31u
++#define PIN_PB0   32u
++#define PIN_PB1   33u
++#define PIN_PB2   34u
++#define PIN_PB3   35u
++#define PIN_PB4   36u
++#define PIN_PB5   37u
++#define PIN_PB6   38u
++#define PIN_PB7   39u
++#define PIN_PB8   40u
++#define PIN_PB9   41u
++#define PIN_PB10  42u
++#define PIN_PB11  43u
++#define PIN_PB18  50u
++#define PIN_PB19  51u
++#define PIN_PB20  52u
++#define PIN_PB21  53u
++#define PIN_PB23  55u
++#define PIN_PB24  56u
++#define PIN_PB25  57u
++#define PIN_PB26  58u
++#define PIN_PB27  59u
++#define PIN_PB28  60u
++#define PIN_PB29  61u
++#define PIN_PB30  62u
++#define PIN_PB31  63u
++
++// Pin function macros
++// -------------------
++#define PINS_GPIO {0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u, 10u, 11u, 12u, 13u, 14u, 15u, 16u, 17u, 18u, 19u, 20u, 21u, 22u, 23u, 24u, 25u, 26u, 27u, 28u, 29u, 30u, 31u, 32u, 33u, 34u, 35u, 36u, 37u, 38u, 39u, 40u, 41u, 42u, 43u, 50u, 51u, 52u, 53u, 55u, 56u, 57u, 58u, 59u, 60u, 61u, 62u, 63u}
++
++// clang-format on
+-- 
+2.43.0
+
