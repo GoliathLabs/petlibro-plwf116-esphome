@@ -1,0 +1,54 @@
+# Minimal test firmware for the Petlibro PLWF116 (RTL8721DM / AmebaD):
+# WiFi + API + logger + OTA. Only the pump pins are touched: PA_30 has a pull-up after reset,
+# so the pump would run unless the firmware drives PA_30 (and the boost pin PB_4) LOW right away.
+esphome:
+  name: plwf116
+  friendly_name: Petlibro PLWF116
+  on_boot:
+    # GPIO outputs already start LOW during setup; this repeats it as early as on_boot allows.
+    priority: 800
+    then:
+      - output.turn_off: pump_enable_out
+      - output.turn_off: pump_boost_out
+
+# ESPHome itself is installed from PR #18718 (see README):
+# the PR needs 2026.11.0-dev core APIs, so it cannot be overlaid on a release via external_components.
+
+rtl87xx:
+  board: petlibro-plwf116
+  family: RTL8720D
+  framework:
+    # LibreTiny PR #403 + PLWF116 board (branch plwf116)
+    version: 1.14.0
+    source: https://github.com/GoliathLabs/libretiny.git#plwf116
+
+logger:
+  baud_rate: 115200
+  level: DEBUG
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: PLWF116 Fallback
+    password: !secret ap_password
+
+captive_portal:
+
+api:
+  encryption:
+    key: !secret api_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+# Keep the pump off. Both pins are driven LOW during setup and stay LOW;
+# this minimal build exposes no control over them.
+output:
+  - platform: gpio
+    id: pump_enable_out
+    pin: 30   # PA_30, pump on/off (HIGH = on)
+  - platform: gpio
+    id: pump_boost_out
+    pin: 36   # PB_4, pump boost (HIGH = boost)
