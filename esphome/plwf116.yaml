@@ -59,6 +59,9 @@ time:
   - platform: sntp
     id: sntp_time
     timezone: Europe/Berlin
+    # filter_days_left needs the time; without this it stays NAN for up to 1 h after boot
+    on_time_sync:
+      - component.update: filter_days_left
 
 # White WiFi LED follows the connection state. Polled, because with on_connect /
 # on_disconnect the LED was off while WiFi was connected (seen 04.11.2026).
