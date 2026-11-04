@@ -83,6 +83,11 @@ interval:
                   light.is_on: led_wifi_white
                 then:
                   - light.turn_off: led_wifi_white
+  # Re-sync the status LEDs with the sensor states.
+  - interval: 30s
+    then:
+      - script.execute: update_leds
+      - script.execute: update_battery_leds
 
 # Red WiFi LED blinks while WiFi/API are not connected (ESPHome status LED).
 status_led:
@@ -536,35 +541,43 @@ output:
     id: out_led_battery_red
     pin: 58  # PB_26
 
+# All LEDs are driven by the firmware only (internal). The warning LEDs were on
+# without a warning, most likely switched from Home Assistant (seen 04.11.2026).
 light:
   - platform: binary
     id: led_wifi_white
     name: LED WLAN
+    internal: true
     output: out_led_wifi_white
     restore_mode: ALWAYS_OFF
   - platform: binary
     id: led_water_red
     name: LED Wasser rot
+    internal: true
     output: out_led_water_red
     restore_mode: ALWAYS_OFF
   - platform: binary
     id: led_water_yellow
     name: LED Wasser gelb
+    internal: true
     output: out_led_water_yellow
     restore_mode: ALWAYS_OFF
   - platform: binary
     id: led_filter_red
     name: LED Filter
+    internal: true
     output: out_led_filter_red
     restore_mode: ALWAYS_OFF
   - platform: binary
     id: led_battery_white
     name: LED Akku weiß
+    internal: true
     output: out_led_battery_white
     restore_mode: ALWAYS_OFF
   - platform: binary
     id: led_battery_red
     name: LED Akku rot
+    internal: true
     output: out_led_battery_red
     restore_mode: ALWAYS_OFF
 
