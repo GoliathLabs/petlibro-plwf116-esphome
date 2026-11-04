@@ -44,10 +44,6 @@ wifi:
   ap:
     ssid: PLWF116 Fallback
     password: !secret ap_password
-  on_connect:
-    - light.turn_on: led_wifi_white
-  on_disconnect:
-    - light.turn_off: led_wifi_white
 
 captive_portal:
 
@@ -63,6 +59,27 @@ time:
   - platform: sntp
     id: sntp_time
     timezone: Europe/Berlin
+
+# White WiFi LED follows the connection state. Polled, because with on_connect /
+# on_disconnect the LED was off while WiFi was connected (seen 04.11.2026).
+interval:
+  - interval: 5s
+    then:
+      - if:
+          condition:
+            wifi.connected:
+          then:
+            - if:
+                condition:
+                  light.is_off: led_wifi_white
+                then:
+                  - light.turn_on: led_wifi_white
+          else:
+            - if:
+                condition:
+                  light.is_on: led_wifi_white
+                then:
+                  - light.turn_off: led_wifi_white
 
 # Red WiFi LED blinks while WiFi/API are not connected (ESPHome status LED).
 status_led:
