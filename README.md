@@ -27,8 +27,9 @@ AmebaD support is not merged upstream yet. You need:
 - ESPHome from [esphome#18718](https://github.com/esphome/esphome/pull/18718)
   (`pip install git+https://github.com/esphome/esphome.git@refs/pull/18718/head`)
 - LibreTiny from [libretiny#403](https://github.com/libretiny-eu/libretiny/pull/403)
-  plus the patches in [`libretiny/`](libretiny/). The configs use the branch
-  `plwf116` of [GoliathLabs/libretiny](https://github.com/GoliathLabs/libretiny), which has both.
+  plus the patches in [`libretiny/`](libretiny/) (chip model, board). The configs
+  use the branch `plwf116` of [GoliathLabs/libretiny](https://github.com/GoliathLabs/libretiny),
+  which is #403 plus these patches.
 - ltchiptool from [ltchiptool#98](https://github.com/libretiny-eu/ltchiptool/pull/98)
   for the first flash over UART. Also install it into
   `~/.platformio/penv/.libretiny`, else the build stops with
@@ -97,7 +98,7 @@ To go back, write the full backup at `0x0`.
 
 ## Notes
 
-- **OTA:** with patch 0001 the update image has a blank slot signature. The
+- **OTA:** with libretiny#403 the update image has a blank slot signature. The
   firmware writes it after the last block, so an update that stops early does
   not leave a broken slot that the bootloader would start.
 - **Flash loader:** it sends stray NAK bytes. `ambd_session.py` works around
