@@ -101,6 +101,10 @@ To go back, write the full backup at `0x0`.
 - **OTA:** with libretiny#403 the update image has a blank slot signature. The
   firmware writes it after the last block, so an update that stops early does
   not leave a broken slot that the bootloader would start.
+- **OTA authentication:** `ota` uses `encryption` with the `api_key` (no
+  password). A device still running password-OTA firmware needs one transition
+  install: add `password: !secret ota_password` and `allow_plaintext_upload: true`
+  under `ota: encryption:`, upload once, then remove both.
 - **Flash loader:** it sends stray NAK bytes. `ambd_session.py` works around
   this until ltchiptool skips them. Writes failed under WSL2 with usbipd; they
   worked with ltchiptool on native Windows.
