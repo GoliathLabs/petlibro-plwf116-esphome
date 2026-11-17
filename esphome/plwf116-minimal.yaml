@@ -41,7 +41,7 @@ api:
 
 ota:
   - platform: esphome
-    password: !secret ota_password
+    encryption:
 
 # Keep the pump off. Both pins are driven LOW during setup and stay LOW;
 # this minimal build exposes no control over them.
